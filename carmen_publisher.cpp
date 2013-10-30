@@ -78,31 +78,7 @@ void publish_scan(diagnostic_updater::DiagnosedPublisher<sensor_msgs::LaserScan>
     scan_msg.ranges.resize(n_range_values);
     scan_msg.header.stamp = (ros::Time)time;//same time as odo
     for (size_t i = 0; i < n_range_values; i++) {
-        // Check for overflow values, see pg 124 of the Sick LMS telegram listing
-        /*switch (range_values[i]) {
-                // 8m or 80m operation
-            case 8191: // Measurement not valid
-                scan_msg.ranges[i] = numeric_limits<float>::quiet_NaN();
-                break;
-            case 8190: // Dazzling
-                scan_msg.ranges[i] = numeric_limits<float>::quiet_NaN();
-                break;
-            case 8189: // Operation Overflow
-                scan_msg.ranges[i] = numeric_limits<float>::quiet_NaN();
-                break;
-            case 8187: // Signal to Noise ratio too small
-                scan_msg.ranges[i] = numeric_limits<float>::quiet_NaN();
-                break;
-            case 8186: // Erorr when reading channel 1
-                scan_msg.ranges[i] = numeric_limits<float>::quiet_NaN();
-                break;
-            case 8183: // Measured value > maximum Value
-                scan_msg.ranges[i] = numeric_limits<float>::infinity();
-                break;
-
-            default:
-                scan_msg.ranges[i] = range_values[i];
-        }*/
+        
         scan_msg.ranges[i] = range_values[i];
     }
     scan_msg.intensities.resize(n_intensity_values);
