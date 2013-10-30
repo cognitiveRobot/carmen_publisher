@@ -56,6 +56,7 @@
 
 using namespace std;
 
+//laserScan publisher
 void publish_scan(diagnostic_updater::DiagnosedPublisher<sensor_msgs::LaserScan> *pub, float *range_values,
         uint32_t n_range_values, uint32_t *intensity_values,
         uint32_t n_intensity_values, double scan_time, float angle_min,
@@ -86,9 +87,10 @@ void publish_scan(diagnostic_updater::DiagnosedPublisher<sensor_msgs::LaserScan>
         scan_msg.intensities[i] = (float) intensity_values[i];
     }
 
-
     pub->publish(scan_msg);
 }
+
+
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "carmen_publisher");
@@ -183,16 +185,16 @@ double time;
             } while (data.compare("ODOM") != 0 && !inputFile.eof());
 
 
-            if (data.compare("ODOM") == 0) {
+            if (data.compare("ODOM") == 0) {//reading robot position
                  inputFile >> data;
-                 rX = atof( data.c_str());
+                 rX = atof( data.c_str());//robot's x
                   inputFile >> data;
-                 rY = atof( data.c_str());
+                 rY = atof( data.c_str());//robot's y
                  inputFile >> data;
-                 theta = atof( data.c_str());            
+                 theta = atof( data.c_str());//robot's theta           
                 
                 for(int i=0;i<3;i++)                    
-                    inputFile >> data;
+                    inputFile >> data;//ignoring some data
                        
                 inputFile >> data; //for time
 		time = atof(data.c_str());
@@ -201,15 +203,12 @@ double time;
             do {
                 inputFile >> data;
             } while (data.compare("ROBOTLASER1") != 0 && !inputFile.eof());
-            // if(scanID > 1 && data.compare("ROBOTLASER1") == 0) {
-            //     distFromLastStep = getDistBtw2Points(atof(odoms[1].c_str()),atof(odoms[2].c_str()),lastX,lastY);
-            //    }
-            //(0.1 means 10cm apart)
+
             if (data.compare("ROBOTLASER1") == 0) {
-                for (unsigned int i = 0; i < 8; i++) {
+                for (unsigned int i = 0; i < 8; i++) {//ignoring some data
                     inputFile >> data;
                 }
-                for (int i = 0; i < 181; i++) {
+                for (int i = 0; i < 181; i++) {//reading laser data
                     //scan from carmen file
                     inputFile >> data;
                     range_values[i] = atof(data.c_str());
@@ -236,14 +235,14 @@ double time;
             updater.update();
 
             //publishing tf
-                odom_trans.header.stamp = (ros::Time)time;//::now();
+                odom_trans.header.stamp = (ros::Time)time;//setting same time for laserScan and robot postion 
                 
             odom_trans.transform.translation.x =rX;
             odom_trans.transform.translation.y = rY;
             odom_trans.transform.translation.z = 0.0;
             odom_trans.transform.rotation = tf::createQuaternionMsgFromYaw(theta);
 
-            odom_broadcaster.sendTransform(odom_trans);
+            odom_broadcaster.sendTransform(odom_trans);//publishing robot position as tf
         }
     } catch (...) {
         ROS_ERROR("Unknown error.");
