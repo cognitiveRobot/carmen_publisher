@@ -56,11 +56,10 @@
 
 using namespace std;
 
-//laserScan publisher
 void publish_scan(diagnostic_updater::DiagnosedPublisher<sensor_msgs::LaserScan> *pub, float *range_values,
         uint32_t n_range_values, uint32_t *intensity_values,
         uint32_t n_intensity_values, double scan_time, float angle_min,
-        float angle_max, std::string frame_id, double time) {
+        float angle_max, std::string frame_id, ros::Time time) {
     static int scan_count = 0;
     sensor_msgs::LaserScan scan_msg;
     scan_msg.header.frame_id = frame_id;
@@ -77,9 +76,33 @@ void publish_scan(diagnostic_updater::DiagnosedPublisher<sensor_msgs::LaserScan>
     scan_msg.range_max = 8.1;
 
     scan_msg.ranges.resize(n_range_values);
-    scan_msg.header.stamp = (ros::Time)time;//same time as odo
+    scan_msg.header.stamp = ros::Time::now();//(ros::Time)time;//same time as odo
     for (size_t i = 0; i < n_range_values; i++) {
-        
+        // Check for overflow values, see pg 124 of the Sick LMS telegram listing
+        /*switch (range_values[i]) {
+                // 8m or 80m operation
+            case 8191: // Measurement not valid
+                scan_msg.ranges[i] = numeric_limits<float>::quiet_NaN();
+                break;
+            case 8190: // Dazzling
+                scan_msg.ranges[i] = numeric_limits<float>::quiet_NaN();
+                break;
+            case 8189: // Operation Overflow
+                scan_msg.ranges[i] = numeric_limits<float>::quiet_NaN();
+                break;
+            case 8187: // Signal to Noise ratio too small
+                scan_msg.ranges[i] = numeric_limits<float>::quiet_NaN();
+                break;
+            case 8186: // Erorr when reading channel 1
+                scan_msg.ranges[i] = numeric_limits<float>::quiet_NaN();
+                break;
+            case 8183: // Measured value > maximum Value
+                scan_msg.ranges[i] = numeric_limits<float>::infinity();
+                break;
+
+            default:
+                scan_msg.ranges[i] = range_values[i];
+        }*/
         scan_msg.ranges[i] = range_values[i];
     }
     scan_msg.intensities.resize(n_intensity_values);
@@ -87,12 +110,15 @@ void publish_scan(diagnostic_updater::DiagnosedPublisher<sensor_msgs::LaserScan>
         scan_msg.intensities[i] = (float) intensity_values[i];
     }
 
+
     pub->publish(scan_msg);
 }
 
-
-
 int main(int argc, char **argv) {
+	if(argc != 2) {
+		cout<<"Usage: rosrun carmen_publisher carmen_publisher <filename-with-path>"<<endl;
+		return 0;
+	}
     ros::init(argc, argv, "carmen_publisher");
     ros::NodeHandle nh;
     ros::NodeHandle nh_ns("~");
@@ -172,10 +198,10 @@ int main(int argc, char **argv) {
             diagnostic_updater::FrequencyStatusParam(&min_freq, &max_freq, freq_tolerance, window_size),
             diagnostic_updater::TimeStampStatusParam(min_delay, max_delay));
 
-    const char* addForLogFile = "/home/albot1/rosData/carmen.log";
+    const char* addForLogFile = argv[1];//"/home/albot1/rosData/carmen.log";//logFile6-ClockW-sLoop-robot1.log
     ifstream inputFile(addForLogFile, ios::in); //open to read
 
-double time;
+    double time;
 
     try {
         while (!inputFile.eof()) {
@@ -185,16 +211,16 @@ double time;
             } while (data.compare("ODOM") != 0 && !inputFile.eof());
 
 
-            if (data.compare("ODOM") == 0) {//reading robot position
+            if (data.compare("ODOM") == 0) {
                  inputFile >> data;
-                 rX = atof( data.c_str());//robot's x
+                 rX = atof( data.c_str());
                   inputFile >> data;
-                 rY = atof( data.c_str());//robot's y
+                 rY = atof( data.c_str());
                  inputFile >> data;
-                 theta = atof( data.c_str());//robot's theta           
+                 theta = atof( data.c_str());            
                 
                 for(int i=0;i<3;i++)                    
-                    inputFile >> data;//ignoring some data
+                    inputFile >> data;//ignoring next 3 data
                        
                 inputFile >> data; //for time
 		time = atof(data.c_str());
@@ -203,12 +229,15 @@ double time;
             do {
                 inputFile >> data;
             } while (data.compare("ROBOTLASER1") != 0 && !inputFile.eof());
-
+            // if(scanID > 1 && data.compare("ROBOTLASER1") == 0) {
+            //     distFromLastStep = getDistBtw2Points(atof(odoms[1].c_str()),atof(odoms[2].c_str()),lastX,lastY);
+            //    }
+            //(0.1 means 10cm apart)
             if (data.compare("ROBOTLASER1") == 0) {
-                for (unsigned int i = 0; i < 8; i++) {//ignoring some data
+                for (unsigned int i = 0; i < 8; i++) {
                     inputFile >> data;
                 }
-                for (int i = 0; i < 181; i++) {//reading laser data
+                for (int i = 0; i < 181; i++) {
                     //scan from carmen file
                     inputFile >> data;
                     range_values[i] = atof(data.c_str());
@@ -217,39 +246,35 @@ double time;
 
                 scanID++;
             }
-
-            if (scanID == 1 or scanID == 3548) {
-                //cout << "Current Time: " << ros::Time::now() << endl;
-                //cout << "Sleeping for 10sec" << endl;
-                //sleep(10);
-                cout << "time "<<time<<endl;
-            }
-
-
-
             //publishing laserScan
             publish_scan(&scan_pub, range_values, n_range_values, intensity_values,
-                    n_intensity_values, scan_time, angle_min, angle_max, frame_id,time);
+                    n_intensity_values, scan_time, angle_min, angle_max, frame_id,ros::Time::now());
             ros::spinOnce();
             // Update diagnostics
             updater.update();
+	
+	    usleep(10000);
+
 
             //publishing tf
-                odom_trans.header.stamp = (ros::Time)time;//setting same time for laserScan and robot postion 
+            odom_trans.header.stamp = ros::Time::now();//(ros::Time)time;//ros::Time::now();
                 
             odom_trans.transform.translation.x =rX;
             odom_trans.transform.translation.y = rY;
             odom_trans.transform.translation.z = 0.0;
             odom_trans.transform.rotation = tf::createQuaternionMsgFromYaw(theta);
 
-            odom_broadcaster.sendTransform(odom_trans);//publishing robot position as tf
+            odom_broadcaster.sendTransform(odom_trans);
+
+	    cout<<"Scan "<<scanID<<" published"<<endl;
+	    usleep(40000);//50000usec = 50ms
         }
     } catch (...) {
         ROS_ERROR("Unknown error.");
         return 1;
     }
 
-    cout << endl << "ScanID: " << scanID << endl;
+    
     ROS_INFO("Success.\n");
 
     return 0;
